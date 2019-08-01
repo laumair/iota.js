@@ -1,0 +1,26 @@
+{
+    "name": "@iota/bundle-miner",
+    "version": "1.0.0-beta.19",
+    "description": "Find bundles of used addresses which reduce key exposure.",
+    "main": "src/index.js",
+    "publishConfig": {
+        "access": "public"
+    },
+    "scripts": {
+        "test": "nyc node --experimental-worker ./test/test.js"
+    },
+    "author": "Chris Dukakis <chris.dukakis@iota.org>",
+    "license": "MIT",
+    "dependencies": {
+        "@iota/bundle": "^1.0.0-beta.19",
+        "@iota/converter": "^1.0.0-beta.19",
+        "@iota/signing": "^1.0.0-beta.19",
+        "@iota/transaction": "^1.0.0-beta.19",
+        "@iota/kerl": "^1.0.0-beta.19",
+        "bluebird": "^3.5.5"
+    },
+    "devDependencies": {
+        "@iota/pad": "^1.0.0-beta.19",
+        "riteway": "^6.1.0"
+    }
+}
