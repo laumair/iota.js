@@ -9,13 +9,10 @@ const {
     transactionEssence,
     isMultipleOfTransactionLength,
 } = require('@iota/transaction')
-const {
-    NORMALIZED_FRAGMENT_LENGTH,
-    MAX_TRYTE_VALUE,
-} = require('@iota/signing')
+const { NORMALIZED_FRAGMENT_LENGTH, MAX_TRYTE_VALUE } = require('@iota/signing')
 const { valueToTrits, tritsToValue } = require('@iota/converter')
 const pad = require('@iota/pad')
-const { Worker } = require('worker_threads')
+const threads = require('bthreads')
 const { EventEmitter } = require('events')
 
 function minNormalizedBundle(normalizedBundles, securityLevel) {
@@ -40,7 +37,7 @@ function bundleEssence(bundle) {
         essence.set(transactionEssence(bundleCopy, offset))
     }
 
-		return essence
+    return essence
 }
 
 /**
@@ -69,49 +66,50 @@ function bundleEssence(bundle) {
  * @return {object} - bundle miner object with start()/stop() methods.
  */
 function createBundleMiner({
-		normalizedBundles,
-		bundle,
+    normalizedBundles,
+    bundle,
     threshold = 100, // TODO: define default threshold
     securityLevel = 2,
-		numberOfWorkers = 1,
-		valuesPerWorkerRound = 10 ** 3,
+    numberOfWorkers = 1,
+    valuesPerWorkerRound = 10 ** 3,
 }) {
-    if  (normalizedBundles.some(normalizedBundle => normalizedBundle.length < NORMALIZED_FRAGMENT_LENGTH * securityLevel)) {
+    if (
+        normalizedBundles.some(normalizedBundle => normalizedBundle.length < NORMALIZED_FRAGMENT_LENGTH * securityLevel)
+    ) {
         throw new Error('Illegal normalized bundle length.')
     }
 
-		if (!isMultipleOfTransactionLength(bundle.length)) {
-				throw new Error('Illegal bundle length')
-		}
+    if (!isMultipleOfTransactionLength(bundle.length)) {
+        throw new Error('Illegal bundle length')
+    }
 
     if ([1, 2, 3].indexOf(securityLevel) === -1) {
         throw new Error('Illegal security level.')
     }
 
-		let running = false
-		let n = 0
+    let running = false
+    let n = 0
 
-		const workers = []
-		const target = {}
-		const bundleMiner = bundleMinerMixin.call(target)
-		const startCommand = () => ({
-				command: 'start',
-				essence: bundleEssence(bundle),
-				minNormalizedBundle: minNormalizedBundle(normalizedBundles, securityLevel),
-				count: valuesPerWorkerRound,
-				index: n++ * valuesPerWorkerRound,
-		})
-		const stopCommand = {
-				command: 'stop',
-		}
+    const workers = []
+    const target = {}
+    const bundleMiner = bundleMinerMixin.call(target)
+    const startCommand = () => ({
+        command: 'start',
+        essence: bundleEssence(bundle),
+        minNormalizedBundle: minNormalizedBundle(normalizedBundles, securityLevel),
+        count: valuesPerWorkerRound,
+        index: n++ * valuesPerWorkerRound,
+    })
+    const stopCommand = {
+        command: 'stop',
+    }
 
     let opt = Number.POSITIVE_INFINITY
 
-		function bundleMinerMixin() {
-				return Object.assign(
-						this,
-						{
-
+    function bundleMinerMixin() {
+        return Object.assign(
+            this,
+            {
                 /**
                  * Starts searching for bundle that satisfies security threshold.
                  *
@@ -119,31 +117,31 @@ function createBundleMiner({
                  *
                  * @param {number} offset - Offset to resume searching.
                  */
-								start(offset) {
-										if (running) {
-												throw new Error('Search is already running.')
-										}
+                start(offset) {
+                    if (running) {
+                        throw new Error('Search is already running.')
+                    }
 
-										if (offset) {
-												n = offset
-										}
+                    if (offset) {
+                        n = offset
+                    }
 
-										running = true
+                    running = true
 
-										workers.forEach(worker => worker.postMessage(startCommand()))
-								},
+                    workers.forEach(worker => worker.postMessage(startCommand()))
+                },
                 /**
                  * Stops searching and kills active threads.
                  *
                  * @method stop
                  */
-								stop() {
-										if (running) {
-												running = false
+                stop() {
+                    if (running) {
+                        running = false
 
-												workers.forEach(worker => worker.postMessage(stopCommand))
-										}
-								},
+                        workers.forEach(worker => worker.postMessage(stopCommand))
+                    }
+                },
                 /**
                  * Returns the latest round. Use this to periodically persit the returned offset
                  * and resume if search has been stopped.
@@ -152,49 +150,48 @@ function createBundleMiner({
                  *
                  * @return {number}
                  */
-								getOffset() {
-										return n
-								}
-						},
-						EventEmitter.prototype,
-				)
-		}
+                getOffset() {
+                    return n
+                },
+            },
+            EventEmitter.prototype
+        )
+    }
 
-		// Init workers
-		for (let i = 0; i < numberOfWorkers; i++) {
-				workers.push(new Worker('./src/worker.js'))
-		}
+    // Init workers
+    for (let i = 0; i < numberOfWorkers; i++) {
+        workers.push(new threads.Worker('./src/worker.js'))
+    }
 
-		workers.forEach(worker => {
-				worker.on('message', message => {
-						if (message && Number.isInteger(message.index)) {
+    workers.forEach(worker => {
+        worker.on('message', message => {
+            if (message && Number.isInteger(message.index)) {
                 if (message.dist < opt) {
-								    opt = message.dist
+                    opt = message.dist
                     bundleMiner.emit('data', message)
                 }
 
-								// TODO: estimate security level
+                // TODO: estimate security level
 
-								// Stop if required security level is reached
-								if (message.dist < threshold) {
+                // Stop if required security level is reached
+                if (message.dist < threshold) {
                     if (running) {
-										    bundleMiner.emit('end', message)
-										    bundleMiner.stop()
+                        bundleMiner.emit('end', message)
+                        bundleMiner.stop()
                     }
-										return
-								}
+                    return
+                }
 
-								// Begin next worker round
-								worker.postMessage(startCommand())
-						}
-				})
+                // Begin next worker round
+                worker.postMessage(startCommand())
+            }
+        })
 
-				worker.on('error', error => bundleMiner.emit('error', error))
-		})
+        worker.on('error', error => bundleMiner.emit('error', error))
+    })
 
-		return bundleMiner
+    return bundleMiner
 }
-
 
 module.exports = {
     createBundleMiner,

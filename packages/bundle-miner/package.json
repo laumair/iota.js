@@ -7,17 +7,18 @@
         "access": "public"
     },
     "scripts": {
-        "test": "nyc node --experimental-worker ./test/test.js"
+        "test": "nyc node ./test/test.js"
     },
     "author": "Chris Dukakis <chris.dukakis@iota.org>",
     "license": "MIT",
     "dependencies": {
         "@iota/bundle": "^1.0.0-beta.19",
         "@iota/converter": "^1.0.0-beta.19",
+        "@iota/kerl": "^1.0.0-beta.19",
         "@iota/signing": "^1.0.0-beta.19",
         "@iota/transaction": "^1.0.0-beta.19",
-        "@iota/kerl": "^1.0.0-beta.19",
-        "bluebird": "^3.5.5"
+        "bluebird": "^3.5.5",
+        "bthreads": "^0.5.0"
     },
     "devDependencies": {
         "@iota/pad": "^1.0.0-beta.19",
